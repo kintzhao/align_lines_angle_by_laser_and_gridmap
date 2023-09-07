@@ -2,9 +2,9 @@
 <package>
   <name>laser_line</name>
   <version>0.0.0</version>
-  <description>The laserline package</description>
+  <description>Laser Line Extraction and Matching</description>
 
-  <maintainer email="ghm@mail.nankai.edu.cn">ghm</maintainer>
+  <maintainer email="huasheng_zyh@163.com">kint</maintainer>
 
   <license>TODO</license>
 
