@@ -12,14 +12,6 @@ laser_line_extraction
 #include <stdio.h>
 #include <math.h>
 
-//这些模块可以用自己的math.h头文件进行包含
-////宏定义
-#define PI 3.1415926535898
-#define t(a) a*PI/180 //角度弧度转换
-//识别模块定义
-#define threshold_a 6     //聚类倍数
-#define distance(a1,a2,b1,b2) sqrt((a1-b1)*(a1-b1)+(a2-b2)*(a2-b2))
-#define max(a,b) a>b?a:b
 
 namespace line_feature
 {

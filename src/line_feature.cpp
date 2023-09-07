@@ -1,5 +1,10 @@
 #include "laserline/line_feature.h"
 #include "sys/time.h"
+ 
+constexpr double PI = 3.14159265358979323846;
+inline double line_feature_distance(double a1, double a2, double b1, double b2) {
+    return sqrt((a1-b1)*(a1-b1)+(a2-b2)*(a2-b2));
+}
 
 namespace line_feature
 {
@@ -181,7 +186,7 @@ bool LineFeature::detectline(const int start,const int num)
 		}
 		
 		//计算到预测点之间的误差
-		error2 = distance_point(range_data_.xs[k],range_data_.ys[k],m_pn.x,m_pn.y);	
+		error2 = line_feature_distance(range_data_.xs[k],range_data_.ys[k],m_pn.x,m_pn.y);	
 		if(error2 > params_.predict_distance)	
 		{
 			flag = true;
@@ -335,7 +340,7 @@ void LineFeature::cleanline()
 				
 				if((theta_d_<0.1)||(theta_d_>(PI - 0.1)))
 				{
-				    int _left = min(m_line[p].left,m_line[q].left);
+				    int _left = std::min(m_line[p].left,m_line[q].left);
 				  
 				    least m_temp = leastsquare(_left,m_line[q].right,1);
 				    
@@ -393,7 +398,7 @@ void LineFeature::cleanline()
 bool LineFeature::delete_short_line(const int n1,const int n2)
 {
 	
-	if(distance_point(range_data_.xs[n1],range_data_.ys[n1],range_data_.xs[n2],range_data_.ys[n2])<params_.min_line_length)
+	if(line_feature_distance(range_data_.xs[n1],range_data_.ys[n1],range_data_.xs[n2],range_data_.ys[n2])<params_.min_line_length)
 	{
 		return false;
 	}
