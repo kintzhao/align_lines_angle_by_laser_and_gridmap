@@ -1,0 +1,9 @@
+<launch>
+  <include file="$(find laser_line)/launch/laser_line.alunch">
+ 
+ <node pkg="laser_line" type="test_extract_line_from_map" name="test_extract_line_from_map" />
+ <node pkg="laser_line" type="test_match_line" name="test_match_line" />
+
+ <include file="$(find laser_line)/launch/show.alunch">
+</launch>
+

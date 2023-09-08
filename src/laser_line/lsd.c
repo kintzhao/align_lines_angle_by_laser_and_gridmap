@@ -47,7 +47,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <float.h>
-#include "lsd.h"
+#include "laser_line/lsd.h"
 
 #ifndef M_LN10
 #define M_LN10 2.30258509299404568402

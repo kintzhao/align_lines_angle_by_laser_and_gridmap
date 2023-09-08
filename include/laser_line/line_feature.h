@@ -7,7 +7,7 @@ laser_line_extraction
 #ifndef _LINE_FEATURE_H_
 #define _LINE_FEATURE_H_
 
-#include <laserline/fstruct.h>
+#include <laser_line/fstruct.h>
 #include <iostream>
 #include <stdio.h>
 #include <math.h>

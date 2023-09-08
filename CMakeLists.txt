@@ -28,25 +28,37 @@ add_message_files(
 
 generate_messages(DEPENDENCIES geometry_msgs   std_msgs)
 
-catkin_package( INCLUDE_DIRS include)
- 
+catkin_package( INCLUDE_DIRS include ${EIGEN3_INCLUDE_DIR})
+
 include_directories(include ${catkin_INCLUDE_DIRS})
 
-add_executable(extract_line_from_laser src/extract_line_from_laser.cpp  src/laser_feature_ros.cpp src/line_feature.cpp)
+add_library(extract_line_from_laser   src/laser_line/laser_feature_ros.cpp src/laser_line/line_feature.cpp)
 target_link_libraries(extract_line_from_laser ${catkin_LIBRARIES}  glog)
 
-add_executable(extract_line_from_map src/extract_line_from_map.cpp  src/lsd.c)
+add_library(extract_line_from_map src/laser_line/extract_line_from_map.cpp  src/laser_line/lsd.c)
 target_link_libraries(extract_line_from_map ${catkin_LIBRARIES}  glog)
  
-add_executable(match_line_node  src/match_line_node.cpp)
-target_link_libraries(match_line_node ${catkin_LIBRARIES}  ceres  glog dw)
-target_include_directories(match_line_node PRIVATE ${EIGEN3_INCLUDE_DIR})
+add_library(match_line  src/laser_line/match_line.cpp)
+target_link_libraries(match_line ${catkin_LIBRARIES}  ceres  glog dw)
+
+add_library(align_lines  src/laser_line/align_lines.cpp)
+target_link_libraries(align_lines ${catkin_LIBRARIES}  ceres  glog dw  extract_line_from_laser  extract_line_from_map )
+ 
+add_executable(test_extract_line_from_laser  src/test/test_extract_line_from_laser.cpp)
+target_link_libraries(test_extract_line_from_laser ${catkin_LIBRARIES}  ceres  glog dw extract_line_from_laser)
+
+add_executable(test_extract_line_from_map  src/test/test_extract_line_from_map.cpp)
+target_link_libraries(test_extract_line_from_map ${catkin_LIBRARIES}  ceres  glog dw extract_line_from_map)
+
+add_executable(test_match_line  src/test/test_match_line.cpp)
+target_link_libraries(test_match_line ${catkin_LIBRARIES}  ceres  glog dw match_line)
 
 
 install(DIRECTORY include/${PROJECT_NAME}/
         DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
 )
-install(TARGETS extract_line_from_laser extract_line_from_map  match_line_node
+install(TARGETS extract_line_from_laser extract_line_from_map  match_line  align_lines 
+                test_extract_line_from_laser test_extract_line_from_map test_match_line
         DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
  

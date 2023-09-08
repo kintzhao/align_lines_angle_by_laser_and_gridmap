@@ -1,24 +1,22 @@
-#include "laserline/laser_feature_ros.h"
-#include "sys/time.h"
+#include "laser_line/laser_feature_ros.h"
 #include "glog/logging.h"
-#include "laser_line/Line.h"
-#include "laser_line/Lines.h"
  
-
-//FILE *fpd = fopen("data.txt","w+");
 namespace line_feature
 {
 
-LaserFeatureROS::LaserFeatureROS(ros::NodeHandle& nh, ros::NodeHandle& nh_local):
-	nh_(nh),
-	nh_local_(nh_local),
+LaserFeatureROS::LaserFeatureROS():
+	nh_("~"),
+	nh_local_("~"),
 	com_bearing_flag(false),
+	is_show_markers_(true), is_sub_sensors_(true),
 	tfl_(tf_buffer_)
 {
 	load_params();
-	scan_subscriber_ = nh_.subscribe(scan_topic_, 1, &LaserFeatureROS::scanCB, this);
 
-	if(show_lines_)
+	if(is_sub_sensors_)
+		scan_subscriber_ = nh_.subscribe(scan_topic_, 1, &LaserFeatureROS::scanCB, this);
+
+	if(is_show_markers_)
 	{
 		marker_publisher_ = nh_.advertise<visualization_msgs::Marker>("/laser_lines_marker", 1);
 	}
@@ -32,11 +30,11 @@ LaserFeatureROS::~LaserFeatureROS()
 
 }
 
-void LaserFeatureROS::compute_bearing(const sensor_msgs::LaserScan::ConstPtr &scan_msg)
+void LaserFeatureROS::compute_bearing(const sensor_msgs::LaserScan &scan_msg)
 {
 	double angle_increment_,angle_start_;
-	angle_increment_ = scan_msg->angle_increment;
-	angle_start_ = scan_msg->angle_min;
+	angle_increment_ = scan_msg.angle_increment;
+	angle_start_ = scan_msg.angle_min;
 	
 	line_feature_.set_angle_increment(angle_increment_);
 	line_feature_.set_angle_start(angle_start_);
@@ -44,7 +42,7 @@ void LaserFeatureROS::compute_bearing(const sensor_msgs::LaserScan::ConstPtr &sc
 	std::vector<double> bearings, cos_bearings, sin_bearings;
 	std::vector<unsigned int> index;
 	unsigned int i = 0;
-	for (double b = scan_msg->angle_min; b <= scan_msg->angle_max; b += scan_msg->angle_increment)
+	for (double b = scan_msg.angle_min; b <= scan_msg.angle_max; b += scan_msg.angle_increment)
 	{
 		bearings.push_back(b);
 		cos_bearings.push_back(cos(b));
@@ -59,24 +57,66 @@ void LaserFeatureROS::compute_bearing(const sensor_msgs::LaserScan::ConstPtr &sc
 
 void LaserFeatureROS::scanCB(const sensor_msgs::LaserScan::ConstPtr &scan_msg)
 {
-	ros::Time statrt_time = ros::Time::now();
-	LOG(INFO)<<"scanCB";
+	extractLine(*scan_msg);
+}
+
+laser_line::Lines LaserFeatureROS::extractLine(const sensor_msgs::LaserScan&  scan_msg)
+{
 	if(!com_bearing_flag)
 	{
 		compute_bearing(scan_msg);
 		com_bearing_flag = true;
 	}
-	std::vector<double> scan_ranges_doubles(scan_msg->ranges.begin(), scan_msg->ranges.end());
+	std::vector<double> scan_ranges_doubles(scan_msg.ranges.begin(), scan_msg.ranges.end());
 	line_feature_.setRangeData(scan_ranges_doubles);
 
-	startgame();
-	LOG(INFO)<<"startgame cost:"<<( ros::Time::now() - statrt_time).toSec();
+	std::vector<line> lines;
+	std::vector<gline> glines;
+  	line_feature_.extractLines(lines,glines);
 
-	sensor_msgs::LaserScan matched_scan = *scan_msg;
-	matched_scan.header.stamp = ros::Time::now();
-	matched_scan.header.frame_id = "matched_laser";
-	matchered_scan_publisher_.publish(matched_scan);
+	std::vector<gline> map_lines;
+	transformLinesToMapFrame(glines, map_lines);
+	publishLines(map_lines);
+
+	if (is_show_markers_)
+	{
+		sensor_msgs::LaserScan matched_scan = scan_msg;
+		matched_scan.header.stamp = ros::Time::now();
+		matched_scan.header.frame_id = "matched_laser";
+		matchered_scan_publisher_.publish(matched_scan);
+	}
+	
+	return lines_msg_;
 }
+
+laser_line::Lines LaserFeatureROS::extractLine(const sensor_msgs::LaserScan &scan_msg, const geometry_msgs::Pose2D& laser_pose)
+{
+	if(!com_bearing_flag)
+	{
+		compute_bearing(scan_msg);
+		com_bearing_flag = true;
+	}
+	std::vector<double> scan_ranges_doubles(scan_msg.ranges.begin(), scan_msg.ranges.end());
+	line_feature_.setRangeData(scan_ranges_doubles);
+
+	std::vector<line> lines;
+	std::vector<gline> glines;
+  	line_feature_.extractLines(lines,glines);
+
+	std::vector<gline> map_lines = transformLinesToMapFrame(glines, laser_pose);
+	publishLines(map_lines, "map");
+	
+	if (is_show_markers_)
+	{
+		sensor_msgs::LaserScan matched_scan = scan_msg;
+		matched_scan.header.stamp = ros::Time::now();
+		matched_scan.header.frame_id = "matched_laser";
+		matchered_scan_publisher_.publish(matched_scan);
+	}
+	
+	return lines_msg_;
+}
+
 
 void LaserFeatureROS::publishMarkerMsg(const std::vector<gline> &m_gline,visualization_msgs::Marker &marker_msg)
 {
@@ -107,12 +147,13 @@ void LaserFeatureROS::publishMarkerMsg(const std::vector<gline> &m_gline,visuali
 	marker_msg.header.stamp = ros::Time::now();
 }
 
-void LaserFeatureROS::publishLines(const std::vector<gline> &m_gline)
+void LaserFeatureROS::publishLines(const std::vector<gline> &m_gline, const std::string frame_id)
 {
-  	if (show_lines_)
+  	if (is_show_markers_)
   	{
   		visualization_msgs::Marker marker_msg;
     	publishMarkerMsg(m_gline, marker_msg);
+		marker_msg.header.frame_id = frame_id;
   		marker_publisher_.publish(marker_msg);
  	}
 	
@@ -121,7 +162,7 @@ void LaserFeatureROS::publishLines(const std::vector<gline> &m_gline)
 	{
 		laser_line::Line line_msg;
 		line_msg.header.stamp = ros::Time::now();
-		line_msg.header.frame_id = "map";//"laser";
+		line_msg.header.frame_id = frame_id;//"map";//"laser";
  
 		line_msg.p1.x = cit->x1;
 	    line_msg.p1.y = cit->y1;
@@ -134,8 +175,10 @@ void LaserFeatureROS::publishLines(const std::vector<gline> &m_gline)
 	}
 
 	lines_msg.header.stamp = ros::Time::now();
-	lines_msg.header.frame_id = "map";//"laser";
-	laser_lines_publisher_.publish(lines_msg);
+	lines_msg.header.frame_id = frame_id;//"map";//"laser";
+
+	lines_msg_ = lines_msg;	
+	laser_lines_publisher_.publish(lines_msg_);
 }
 
 void LaserFeatureROS::transformLinesToMapFrame(const std::vector<gline>& glines_in, std::vector<gline>& glines_out)
@@ -181,6 +224,51 @@ void LaserFeatureROS::transformLinesToMapFrame(const std::vector<gline>& glines_
     }
 }
 
+std::vector<gline> LaserFeatureROS::transformLinesToMapFrame(const std::vector<gline>& glines_in, const geometry_msgs::Pose2D& laser_pose)
+{
+    geometry_msgs::TransformStamped transform;
+	transform.header.frame_id = "map";
+	transform.child_frame_id = "laser";
+	transform.header.stamp = ros::Time::now();
+	transform.transform.translation.x = laser_pose.x;
+	transform.transform.translation.y = laser_pose.y;
+	transform.transform.translation.z =  0.0;
+	//transform.transform.rotation = 
+	tf2::Quaternion align_q;
+	align_q.setRPY(0.0, 0.0, laser_pose.theta);
+	tf2::convert(align_q, transform.transform.rotation);
+
+	std::vector<gline> glines_out;
+    for(const auto& line : glines_in)
+    {
+        gline transformed_line;
+
+        // Transform start point
+        geometry_msgs::PointStamped start_point_in, start_point_out;
+        start_point_in.header.frame_id = "laser";
+        start_point_in.point.x = line.x1;
+        start_point_in.point.y = line.y1;
+
+        tf2::doTransform(start_point_in, start_point_out, transform);
+        transformed_line.x1 = start_point_out.point.x;
+        transformed_line.y1 = start_point_out.point.y;
+
+        // Transform end point
+        geometry_msgs::PointStamped end_point_in, end_point_out;
+        end_point_in.header.frame_id = "laser";
+        end_point_in.point.x = line.x2;
+        end_point_in.point.y = line.y2;
+
+        tf2::doTransform(end_point_in, end_point_out, transform);
+        transformed_line.x2 = end_point_out.point.x;
+        transformed_line.y2 = end_point_out.point.y;
+
+        // Append the transformed line to the output vector
+        glines_out.push_back(transformed_line);
+    }
+
+	return glines_out;
+}
 
 //主函数
 void LaserFeatureROS::startgame()
@@ -213,7 +301,7 @@ void LaserFeatureROS::load_params()
 
 	nh_local_.param<bool>("show_lines", show_lines, true);
 
-	show_lines_ = show_lines;
+	is_show_markers_ = show_lines;
 	ROS_DEBUG("show_lines: %s", show_lines ? "true" : "false");
 
 	// Parameters used by the line extraction algorithm
@@ -221,7 +309,7 @@ void LaserFeatureROS::load_params()
 	int min_line_points,seed_line_points;
 	double least_thresh,min_line_length,predict_distance;
 
-	nh_local_.param<double>("least_thresh", least_thresh, 0.04);
+	nh_local_.param<double>("least_thresh", least_thresh, 0.03);
 	line_feature_.set_least_threshold(least_thresh);
 	ROS_DEBUG("least_thresh: %lf", least_thresh);
 
@@ -237,7 +325,7 @@ void LaserFeatureROS::load_params()
 	line_feature_.set_seed_line_points(seed_line_points);
 	ROS_DEBUG("seed_line_points: %d", seed_line_points);
 
-  	nh_local_.param<int>("min_line_points", min_line_points, 12);
+  	nh_local_.param<int>("min_line_points", min_line_points, 8);
   	line_feature_.set_min_line_points(min_line_points);
   	ROS_DEBUG("min_line_points: %d", min_line_points);
 

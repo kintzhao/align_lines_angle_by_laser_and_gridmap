@@ -1,5 +1,5 @@
 <launch>
-  <node name="extract_line_from_laser" pkg="laser_line" type="extract_line_from_laser">
+  <node name="test_extract_line_from_laser" pkg="laser_line" type="test_extract_line_from_laser">
     <param name="~frame_id" value="laser" />
     <param name="~scan_topic" value="scan" />
     <param name="~frequency" value="15.0" />
