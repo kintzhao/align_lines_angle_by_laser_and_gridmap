@@ -78,7 +78,8 @@ namespace line_feature
 		tf2_ros::Buffer tf_buffer_;
 		tf2_ros::TransformListener tfl_;
     	bool is_sub_sensors_ = false;
-		bool is_show_markers_ = true;				
+		bool is_show_markers_ = true;
+		bool is_test_local_ = true;				
 	};
 
 }

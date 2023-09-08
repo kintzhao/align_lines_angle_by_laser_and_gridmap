@@ -8,11 +8,12 @@ LaserFeatureROS::LaserFeatureROS():
 	nh_("~"),
 	nh_local_("~"),
 	com_bearing_flag(false),
-	is_show_markers_(true), is_sub_sensors_(true),
+	is_show_markers_(true), is_sub_sensors_(true), is_test_local_(true),
 	tfl_(tf_buffer_)
 {
+	LOG(INFO)<<"is_sub_sensors_:"<<is_sub_sensors_<<" is_show_markers_:"<<is_show_markers_;	
 	load_params();
-
+	LOG(INFO)<<"is_sub_sensors_:"<<is_sub_sensors_<<" is_show_markers_:"<<is_show_markers_;
 	if(is_sub_sensors_)
 		scan_subscriber_ = nh_.subscribe(scan_topic_, 1, &LaserFeatureROS::scanCB, this);
 
@@ -22,7 +23,7 @@ LaserFeatureROS::LaserFeatureROS():
 	}
 	laser_lines_publisher_ = nh_.advertise<laser_line::Lines>("/laser_lines", 1);	
 	matchered_scan_publisher_ = nh_.advertise<sensor_msgs::LaserScan>("/matchered_scan", 1);
-	ros::spin();
+
 }
 
 LaserFeatureROS::~LaserFeatureROS()
@@ -42,15 +43,30 @@ void LaserFeatureROS::compute_bearing(const sensor_msgs::LaserScan &scan_msg)
 	std::vector<double> bearings, cos_bearings, sin_bearings;
 	std::vector<unsigned int> index;
 	unsigned int i = 0;
-	for (double b = scan_msg.angle_min; b <= scan_msg.angle_max; b += scan_msg.angle_increment)
+	if( scan_msg.angle_increment < 0)
 	{
-		bearings.push_back(b);
-		cos_bearings.push_back(cos(b));
-    	sin_bearings.push_back(sin(b));
-    	index.push_back(i);
-    	i++;
+		for (double b = scan_msg.angle_min; b >= scan_msg.angle_max; b += scan_msg.angle_increment)
+		{
+			bearings.push_back(b);
+			cos_bearings.push_back(cos(b));
+			sin_bearings.push_back(sin(b));
+			index.push_back(i);
+			i++;
+		}
+	}
+	else
+	{
+		for (double b = scan_msg.angle_min; b <= scan_msg.angle_max; b += scan_msg.angle_increment)
+		{
+			bearings.push_back(b);
+			cos_bearings.push_back(cos(b));
+			sin_bearings.push_back(sin(b));
+			index.push_back(i);
+			i++;
+		}		
 	}
 
+	std::cout<<"================xxxxranges:"<<scan_msg.ranges.size()<<std::endl;;
 	line_feature_.setCosSinData(bearings, cos_bearings, sin_bearings, index);
 	ROS_DEBUG("Data has been cached.");
 }
@@ -62,6 +78,7 @@ void LaserFeatureROS::scanCB(const sensor_msgs::LaserScan::ConstPtr &scan_msg)
 
 laser_line::Lines LaserFeatureROS::extractLine(const sensor_msgs::LaserScan&  scan_msg)
 {
+	//LOG(INFO)<<"extractLine";
 	if(!com_bearing_flag)
 	{
 		compute_bearing(scan_msg);
@@ -73,10 +90,18 @@ laser_line::Lines LaserFeatureROS::extractLine(const sensor_msgs::LaserScan&  sc
 	std::vector<line> lines;
 	std::vector<gline> glines;
   	line_feature_.extractLines(lines,glines);
+ 	//LOG(INFO)<<"extractLine: "<<glines.size();
+	if(is_test_local_)
+	{
+		publishLines(glines, "laser");
+	}
+	else
+	{
+		std::vector<gline> map_lines;
+		transformLinesToMapFrame(glines, map_lines);
+		publishLines(map_lines);
+	}
 
-	std::vector<gline> map_lines;
-	transformLinesToMapFrame(glines, map_lines);
-	publishLines(map_lines);
 
 	if (is_show_markers_)
 	{
@@ -295,7 +320,7 @@ void LaserFeatureROS::load_params()
 	frame_id_ = frame_id;
 	ROS_DEBUG("frame_id: %s", frame_id_.c_str());
 
-	nh_local_.param<std::string>("scan_topic", scan_topic, "scan");
+	nh_local_.param<std::string>("scan_topic", scan_topic, "/scan");
 	scan_topic_ = scan_topic;
 	ROS_DEBUG("scan_topic: %s", scan_topic_.c_str());
 
